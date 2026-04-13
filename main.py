@@ -1,46 +1,38 @@
-
 import asyncio
 import os
 import feedparser
+import sys
 from telethon import TelegramClient
 
-NEWS_SOURCES = {
-    "中央社-政治": "https://www.cna.com.tw/rss/aipl.xml",
-    "自由時報-政治": "https://news.ltn.com.tw/rss/politics.xml",
-    "聯合報-政治": "https://udn.com.tw/rssfeed/news/2/6631?ch=news",
-    "中時-政治": "https://www.chinatimes.com.tw/rss/politic.xml"
-}
-
-# 讀取並檢查環境變數
-try:
-    API_ID = int(os.environ.get('API_ID', 0))
-    API_HASH = os.environ.get('API_HASH', '')
-    TG_TOKEN = os.environ.get('TG_TOKEN', '')
-    TG_CHAT_ID = int(os.environ.get('TG_CHAT_ID', 0))
-except Exception as e:
-    print(f"❌ 變數格式錯誤: {e}")
+# 測試用：先放一個來源就好，確保能通
+NEWS_SOURCES = {"中央社-政治": "https://www.cna.com.tw/rss/aipl.xml"}
 
 async def main():
-    if not TG_TOKEN or not TG_CHAT_ID:
-        print("❌ 錯誤：找不到 TG_TOKEN 或 TG_CHAT_ID，請檢查 GitHub Secrets 設定！")
-        return
+    print("--- 偵錯模式啟動 ---")
+    
+    # 讀取 Secrets
+    api_id_raw = os.environ.get('API_ID', '')
+    api_hash = os.environ.get('API_HASH', '')
+    bot_token = os.environ.get('TG_TOKEN', '')
+    chat_id_raw = os.environ.get('TG_CHAT_ID', '')
+
+    print(f"檢查 ID 格式: API_ID={api_id_raw[:3]}..., CHAT_ID={chat_id_raw}")
 
     try:
-        client = TelegramClient('bot_session', API_ID, API_HASH)
-        await client.start(bot_token=TG_TOKEN)
+        api_id = int(api_id_raw)
+        chat_id = int(chat_id_raw)
         
-        report_message = "🗞 **【桑記者的今日輿情早報】**\n\n"
-        for name, url in NEWS_SOURCES.items():
-            feed = feedparser.parse(url)
-            report_message += f"📍 **{name}**\n"
-            for entry in feed.entries[:2]:
-                report_message += f"• [{entry.title}]({entry.link})\n"
-            report_message += "\n"
-
-        await client.send_message(TG_CHAT_ID, report_message, link_preview=False)
-        print("✅ 早報發送成功！")
+        client = TelegramClient('bot_session', api_id, api_hash)
+        await client.start(bot_token=bot_token)
+        
+        msg = "🗞 **桑記者，這是一則自動測試訊息。**\n如果你看到這則訊息，代表連線成功了！"
+        await client.send_message(chat_id, msg)
+        print("✅ 成功發送測試訊息！請檢查 Telegram。")
+        
+    except ValueError:
+        print("❌ 錯誤：API_ID 或 TG_CHAT_ID 必須是純數字，請檢查 Secrets 是否填錯。")
     except Exception as e:
-        print(f"❌ 發送失敗，原因：{e}")
+        print(f"❌ 發生未預期的錯誤: {str(e)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
