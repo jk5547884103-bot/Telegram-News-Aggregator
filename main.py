@@ -15,7 +15,7 @@ NEWS_SOURCES = {
 }
 
 async def main():
-    print(">>> 輿情機器人啟動：採用『逐家發送』模式確保不漏失...", flush=True)
+    print(">>> 輿情機器人啟動：採用【逐家發送模式】...", flush=True)
     
     try:
         api_id = int(os.environ.get('API_ID'))
@@ -29,31 +29,41 @@ async def main():
     client = TelegramClient('bot_session', api_id, api_hash)
     await client.start(bot_token=bot_token)
     
-    # 先發送報頭
+    # 先發送總標題
     await client.send_message(chat_id, "🗞 **【桑記者的精選輿情早報】**")
-    await asyncio.sleep(1) # 稍作停頓
+    await asyncio.sleep(1.5)
 
     for name, url in NEWS_SOURCES.items():
         try:
+            print(f">>> 正在抓取: {name}", flush=True)
             feed = feedparser.parse(url)
-            if feed.entries:
-                # 每一家媒體獨立組成一則訊息
-                report_message = f"📍 **{name}**\n"
-                count = 0
-                for entry in feed.entries[:4]:
-                    report_message += f"• [{entry.title}]({entry.link})\n"
-                    count += 1
-                
-                if count > 0:
-                    await client.send_message(chat_id, report_message, link_preview=False)
-                    print(f"✅ {name} 發送成功", flush=True)
-                    await asyncio.sleep(0.5) # 防止發送過快
-            else:
-                print(f"⚠️ {name} 目前沒有新新聞", flush=True)
-        except Exception as e:
-            print(f"⚠️ 抓取 {name} 失敗: {e}", flush=True)
+            
+            if not feed.entries:
+                print(f"⚠️ {name} 目前無新內容，跳過。", flush=True)
+                continue
 
-    print("✅ 所有報紙送達完畢！", flush=True)
+            report_message = f"📍 **{name}**\n"
+            news_count = 0
+            
+            # 抓取最新 4 則
+            for entry in feed.entries[:4]:
+                title = entry.get('title', '無標題')
+                link = entry.get('link', '#')
+                report_message += f"• [{title}]({link})\n"
+                news_count += 1
+            
+            if news_count > 0:
+                # 抓到一家就發送一家，確保不漏失
+                await client.send_message(chat_id, report_message, link_preview=False)
+                print(f"✅ {name} 發送成功", flush=True)
+                await asyncio.sleep(1) # 間隔 1 秒防止 Telegram 限制
+                
+        except Exception as e:
+            # 即使這一家失敗，也會繼續抓下一家
+            print(f"❌ {name} 抓取或發送失敗: {e}", flush=True)
+            continue
+
+    print("✅ 所有媒體處理完畢！", flush=True)
     await client.disconnect()
 
 if __name__ == "__main__":
