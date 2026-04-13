@@ -1,0 +1,29 @@
+name: Daily Political News
+on:
+  schedule:
+    - cron: '10 23 * * *' # 台灣時間每天早上 07:10 執行
+  workflow_dispatch:      # 讓您可以手動按按鈕測試
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install telethon feedparser asyncio
+
+      - name: Run Scraper
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: python main.py
