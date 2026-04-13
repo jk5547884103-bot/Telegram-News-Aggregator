@@ -1,7 +1,9 @@
 import asyncio
 import os
 import feedparser
+import sys
 from telethon import TelegramClient
+from telethon.errors import FloodWaitError
 
 # 桑記者的精選清單
 NEWS_SOURCES = {
@@ -15,49 +17,50 @@ NEWS_SOURCES = {
 }
 
 async def main():
-    print(">>> 系統啟動，檢查環境變數...", flush=True)
+    print(">>> 系統啟動，進入穩定連線模式...", flush=True)
+    
+    api_id = os.environ.get('API_ID', '').strip()
+    api_hash = os.environ.get('API_HASH', '').strip()
+    bot_token = os.environ.get('TG_TOKEN', '').strip()
+    chat_id_str = os.environ.get('TG_CHAT_ID', '').strip()
+
+    if not all([api_id, api_hash, bot_token, chat_id_str]):
+        print("❌ 錯誤：環境變數設定不完整。", flush=True)
+        return
+
+    chat_id = int(chat_id_str)
+    
+    # 使用 in-memory session 避免檔案衝突
+    client = TelegramClient(None, int(api_id), api_hash)
     
     try:
-        # 讀取並清理環境變數（防止有空格）
-        api_id = os.environ.get('API_ID', '').strip()
-        api_hash = os.environ.get('API_HASH', '').strip()
-        bot_token = os.environ.get('TG_TOKEN', '').strip()
-        chat_id_str = os.environ.get('TG_CHAT_ID', '').strip()
-
-        print(f">>> 目標 Chat ID: {chat_id_str}", flush=True)
-
-        if not all([api_id, api_hash, bot_token, chat_id_str]):
-            print("❌ 錯誤：Secrets 設定有缺漏，請檢查 GitHub Settings。", flush=True)
-            return
-
-        # 這裡強迫轉換為數字，如果 chat_id 包含 '-' 號也會正確處理
-        chat_id = int(chat_id_str)
-        
-        client = TelegramClient('final_session', int(api_id), api_hash)
         await client.start(bot_token=bot_token)
+        print("✅ Telegram 連線成功！", flush=True)
         
-        # 測試發送一則簡單訊息
-        await client.send_message(chat_id, "🚀 **輿情系統校準測試：看到這則代表成功了！**")
-        await asyncio.sleep(1)
-
+        await client.send_message(chat_id, "🗞 **【桑記者的全方位輿情監測 - 穩定版】**")
+        
         for name, url in NEWS_SOURCES.items():
-            print(f">>> 抓取中: {name}", flush=True)
-            feed = feedparser.parse(url)
-            if feed.entries:
-                msg = f"📍 **{name}**\n"
-                for entry in feed.entries[:4]:
-                    title = entry.get('title', '無標題')
-                    link = entry.get('link', '#')
-                    msg += f"• [{title}]({link})\n"
-                
-                await client.send_message(chat_id, msg, link_preview=False)
-                await asyncio.sleep(1)
+            try:
+                feed = feedparser.parse(url)
+                if feed.entries:
+                    msg = f"📍 **{name}**\n"
+                    for entry in feed.entries[:4]:
+                        title = entry.get('title', '無標題')
+                        link = entry.get('link', '#')
+                        msg += f"• [{title}]({link})\n"
+                    
+                    await client.send_message(chat_id, msg, link_preview=False)
+                    print(f"✅ {name} 已送達", flush=True)
+                    await asyncio.sleep(2) # 增加發送間隔，防止被禁
+            except Exception as e:
+                print(f"⚠️ {name} 抓取跳過: {e}", flush=True)
 
-        await client.disconnect()
-        print("✅ 任務全部完成！", flush=True)
-
+    except FloodWaitError as e:
+        print(f"❌ 觸發 Telegram 冷卻機制：請等待 {e.seconds} 秒後再試。", flush=True)
     except Exception as e:
-        print(f"❌ 執行過程發生錯誤: {e}", flush=True)
+        print(f"❌ 發生錯誤: {e}", flush=True)
+    finally:
+        await client.disconnect()
 
 if __name__ == "__main__":
     asyncio.run(main())
