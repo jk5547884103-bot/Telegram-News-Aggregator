@@ -1,17 +1,19 @@
 name: Daily Political News
 on:
   schedule:
-    - cron: '10 23 * * *'
-  workflow_dispatch:
+    - cron: '10 23 * * *'  # 台灣時間早上 07:10
+  workflow_dispatch:       # 手動測試按鈕
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: master  # 強制抓取最新的 master 分支
+          ref: master
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,8 +31,5 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
-        run: |
-          # 增加偵錯資訊
-          echo "正在檢查 main.py 內容："
-          cat main.py | head -n 20
-          python -u main.py
+        # 關鍵修正：確保執行的是新檔案
+        run: python -u scraper_new.py
