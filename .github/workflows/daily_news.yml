@@ -1,6 +1,8 @@
 name: Daily Political News
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '10 23 * * *'  # 台灣時間早上 07:10
+  workflow_dispatch:       # 讓你可以手動按按鈕
 
 jobs:
   build:
@@ -17,22 +19,10 @@ jobs:
       - name: Install dependencies
         run: pip install telethon feedparser asyncio
 
-      - name: 檢查檔案在哪裡
-        run: |
-          echo "當前目錄路徑: $(pwd)"
-          echo "所有檔案清單:"
-          find . -maxdepth 2 -not -path '*/.*'
-
-      - name: 強制執行程式
+      - name: Run Scraper
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
-        run: |
-          if [ -f "main.py" ]; then
-            python main.py
-          else
-            echo "❌ 嚴重錯誤：在根目錄找不到 main.py！請確認你的檔案沒有放錯資料夾。"
-            exit 1
-          fi
+        run: python main.py
