@@ -1,18 +1,18 @@
 name: Daily Political News
 on:
   schedule:
-    - cron: '10 23 * * *'
-  workflow_dispatch:
+    - cron: '10 23 * * *' # 台灣時間早上 07:10
+  workflow_dispatch:      # 讓你可以手動按按鈕測試
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4  # 升級到 v4
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # 升級到 v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -26,4 +26,8 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
-        run: python main.py
+        run: |
+          echo "--- 目前檔案清單檢查 ---"
+          ls -R
+          echo "--- 開始執行程式 ---"
+          python main.py
