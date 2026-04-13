@@ -1,12 +1,14 @@
 name: Daily Political News
 on:
   schedule:
-    - cron: '10 23 * * *'  # 台灣時間早上 07:10
-  workflow_dispatch:       # 讓你可以手動按按鈕測試
+    - cron: '10 23 * * *'  # 台灣時間早上 07:10 自動執行
+  workflow_dispatch:       # 讓您可以隨時手動按下測試按鈕
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
