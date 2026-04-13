@@ -1,6 +1,7 @@
 import asyncio
 import os
 import feedparser
+import re
 from telethon import TelegramClient
 
 # 桑記者的精選輿情來源清單
@@ -14,29 +15,35 @@ NEWS_SOURCES = {
     "鏡週刊-政治": "https://www.mirrormedia.mg/rss/category/political"
 }
 
+def clean_html(raw_html):
+    """清理 HTML 標籤，確保標題乾淨"""
+    cleanr = re.compile('<.*?>')
+    cleantext = re.sub(cleanr, '', str(raw_html))
+    return cleantext.strip()
+
 async def fetch_and_send(client, chat_id, name, url):
-    """獨立的抓取與發送函數，確保媒體之間互不干擾"""
     try:
         print(f">>> 正在處理: {name}", flush=True)
-        # 抓取 RSS
+        # 強制重新抓取
         feed = feedparser.parse(url)
         
-        # 如果沒抓到內容
         if not feed.entries:
-            print(f"⚠️ {name} 抓取不到內容，可能是網站 RSS 暫時斷線", flush=True)
+            print(f"⚠️ {name} 抓取不到內容", flush=True)
             return
 
         report_message = f"📍 **{name}**\n"
         count = 0
         
-        # 抓取前 4 則
         for entry in feed.entries[:4]:
-            # 優先嘗試不同的標題欄位
-            title = entry.get('title') or entry.get('summary') or "無標題"
-            link = entry.get('link') or entry.get('guid') or "#"
+            # 【關鍵修正】嘗試所有可能的標題與連結欄位
+            title = entry.get('title') or entry.get('summary') or entry.get('description') or "新聞標題"
+            link = entry.get('link') or entry.get('guid') or entry.get('id') or "#"
             
-            # 清理標題字串（避免特殊字元造成 Telegram 報錯）
-            title = str(title).strip()
+            # 清理標題中的 HTML 碼
+            title = clean_html(title)
+            # 如果標題太長（有些 RSS 會把全文塞在標題），截斷它
+            if len(title) > 100:
+                title = title[:100] + "..."
             
             report_message += f"• [{title}]({link})\n"
             count += 1
@@ -44,13 +51,13 @@ async def fetch_and_send(client, chat_id, name, url):
         if count > 0:
             await client.send_message(chat_id, report_message, link_preview=False)
             print(f"✅ {name} 發送成功", flush=True)
-            await asyncio.sleep(1.2) # 安全間隔
+            await asyncio.sleep(1.5) # 稍微加長間隔，增加穩定性
             
     except Exception as e:
-        print(f"❌ {name} 發生不可預期錯誤: {e}", flush=True)
+        print(f"❌ {name} 錯誤: {e}", flush=True)
 
 async def main():
-    print(">>> 輿情機器人啟動：採用【全隔離執行模式】...", flush=True)
+    print(">>> 輿情機器人啟動：採用【地毯式解析模式】...", flush=True)
     
     try:
         api_id = int(os.environ.get('API_ID'))
@@ -64,15 +71,15 @@ async def main():
     client = TelegramClient('bot_session', api_id, api_hash)
     await client.start(bot_token=bot_token)
     
-    # 1. 發送報頭
+    # 發送報頭
     await client.send_message(chat_id, "🗞 **【桑記者的精選輿情早報】**")
     await asyncio.sleep(2)
 
-    # 2. 逐一處理媒體（強制隔離）
+    # 逐一處理，確保彼此不干擾
     for name, url in NEWS_SOURCES.items():
         await fetch_and_send(client, chat_id, name, url)
 
-    print("✅ 所有任務已嘗試執行完畢。", flush=True)
+    print("✅ 任務執行完畢。", flush=True)
     await client.disconnect()
 
 if __name__ == "__main__":
