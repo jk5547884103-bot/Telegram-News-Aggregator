@@ -1,12 +1,9 @@
 import asyncio
 import os
 import feedparser
-import sys
 from telethon import TelegramClient
 
-# 強制設定輸出編碼，防止中文報錯
-sys.stdout.reconfigure(encoding='utf-8')
-
+# 桑記者的精選清單
 NEWS_SOURCES = {
     "聯合報-政治": "https://udn.com.tw/rssfeed/news/2/6631?ch=news",
     "中時電子報-政治": "https://www.chinatimes.com.tw/rss/politic.xml",
@@ -18,48 +15,49 @@ NEWS_SOURCES = {
 }
 
 async def main():
-    print(">>> 輿情機器人：啟動系統重試機制...", flush=True)
+    print(">>> 系統啟動，檢查環境變數...", flush=True)
     
     try:
-        api_id = os.environ.get('API_ID')
-        api_hash = os.environ.get('API_HASH')
-        bot_token = os.environ.get('TG_TOKEN')
-        chat_id = os.environ.get('TG_CHAT_ID')
+        # 讀取並清理環境變數（防止有空格）
+        api_id = os.environ.get('API_ID', '').strip()
+        api_hash = os.environ.get('API_HASH', '').strip()
+        bot_token = os.environ.get('TG_TOKEN', '').strip()
+        chat_id_str = os.environ.get('TG_CHAT_ID', '').strip()
 
-        if not all([api_id, api_hash, bot_token, chat_id]):
-            print("❌ 錯誤：Secrets 遺失或讀取失敗。", flush=True)
+        print(f">>> 目標 Chat ID: {chat_id_str}", flush=True)
+
+        if not all([api_id, api_hash, bot_token, chat_id_str]):
+            print("❌ 錯誤：Secrets 設定有缺漏，請檢查 GitHub Settings。", flush=True)
             return
 
-        client = TelegramClient('bot_session_new', int(api_id), api_hash)
+        # 這裡強迫轉換為數字，如果 chat_id 包含 '-' 號也會正確處理
+        chat_id = int(chat_id_str)
+        
+        client = TelegramClient('final_session', int(api_id), api_hash)
         await client.start(bot_token=bot_token)
         
-        # 發送報頭
-        await client.send_message(int(chat_id), "🗞 **【桑記者的精選輿情 - 系統校準版】**")
-        await asyncio.sleep(2)
+        # 測試發送一則簡單訊息
+        await client.send_message(chat_id, "🚀 **輿情系統校準測試：看到這則代表成功了！**")
+        await asyncio.sleep(1)
 
         for name, url in NEWS_SOURCES.items():
-            try:
-                print(f">>> 正在抓取: {name}", flush=True)
-                feed = feedparser.parse(url)
+            print(f">>> 抓取中: {name}", flush=True)
+            feed = feedparser.parse(url)
+            if feed.entries:
+                msg = f"📍 **{name}**\n"
+                for entry in feed.entries[:4]:
+                    title = entry.get('title', '無標題')
+                    link = entry.get('link', '#')
+                    msg += f"• [{title}]({link})\n"
                 
-                if feed.entries:
-                    msg = f"📍 **{name}**\n"
-                    for entry in feed.entries[:4]:
-                        title = entry.get('title', '無標題').strip()
-                        link = entry.get('link', '#')
-                        msg += f"• [{title}]({link})\n"
-                    
-                    await client.send_message(int(chat_id), msg, link_preview=False)
-                    print(f"✅ {name} 發送成功", flush=True)
-                    await asyncio.sleep(1)
-            except Exception as inner_e:
-                print(f"⚠️ {name} 處理時跳過: {inner_e}", flush=True)
+                await client.send_message(chat_id, msg, link_preview=False)
+                await asyncio.sleep(1)
 
         await client.disconnect()
-        print(">>> 任務圓滿結束。", flush=True)
+        print("✅ 任務全部完成！", flush=True)
 
     except Exception as e:
-        print(f"❌ 嚴重錯誤：{str(e)}", flush=True)
+        print(f"❌ 執行過程發生錯誤: {e}", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
