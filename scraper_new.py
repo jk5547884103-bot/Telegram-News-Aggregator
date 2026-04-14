@@ -1,9 +1,8 @@
 import asyncio
 import os
 import feedparser
-import sys
+import urllib.request
 from telethon import TelegramClient
-from telethon.errors import FloodWaitError
 
 # 桑記者的精選清單
 NEWS_SOURCES = {
@@ -16,8 +15,18 @@ NEWS_SOURCES = {
     "自由時報-政治": "https://news.ltn.com.tw/rss/politics.xml"
 }
 
+async def fetch_rss_safely(url):
+    """偽裝成瀏覽器抓取 RSS，防止被網站擋掉"""
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            return feedparser.parse(response.read())
+    except Exception as e:
+        print(f">>> 抓取網址時發生網路錯誤: {url}, 原因: {e}")
+        return None
+
 async def main():
-    print(">>> 系統啟動，進入穩定連線模式...", flush=True)
+    print(">>> 系統啟動：進入瀏覽器模擬解析模式...", flush=True)
     
     api_id = os.environ.get('API_ID', '').strip()
     api_hash = os.environ.get('API_HASH', '').strip()
@@ -25,40 +34,35 @@ async def main():
     chat_id_str = os.environ.get('TG_CHAT_ID', '').strip()
 
     if not all([api_id, api_hash, bot_token, chat_id_str]):
-        print("❌ 錯誤：環境變數設定不完整。", flush=True)
+        print("❌ 錯誤：環境變數不完整。")
         return
 
     chat_id = int(chat_id_str)
-    
-    # 使用 in-memory session 避免檔案衝突
     client = TelegramClient(None, int(api_id), api_hash)
     
     try:
         await client.start(bot_token=bot_token)
-        print("✅ Telegram 連線成功！", flush=True)
-        
-        await client.send_message(chat_id, "🗞 **【桑記者的全方位輿情監測 - 穩定版】**")
+        await client.send_message(chat_id, "🗞 **【桑記者的精選輿情 - 瀏覽器模擬版】**")
         
         for name, url in NEWS_SOURCES.items():
-            try:
-                feed = feedparser.parse(url)
-                if feed.entries:
-                    msg = f"📍 **{name}**\n"
-                    for entry in feed.entries[:4]:
-                        title = entry.get('title', '無標題')
-                        link = entry.get('link', '#')
-                        msg += f"• [{title}]({link})\n"
-                    
-                    await client.send_message(chat_id, msg, link_preview=False)
-                    print(f"✅ {name} 已送達", flush=True)
-                    await asyncio.sleep(2) # 增加發送間隔，防止被禁
-            except Exception as e:
-                print(f"⚠️ {name} 抓取跳過: {e}", flush=True)
+            print(f">>> 正在掃描: {name}...", flush=True)
+            feed = await fetch_rss_safely(url)
+            
+            if feed and feed.entries:
+                msg = f"📍 **{name}**\n"
+                for entry in feed.entries[:4]:
+                    title = entry.get('title', '無標題').strip()
+                    link = entry.get('link', '#')
+                    msg += f"• [{title}]({link})\n"
+                
+                await client.send_message(chat_id, msg, link_preview=False)
+                print(f"✅ {name} 成功發送", flush=True)
+                await asyncio.sleep(1.5)
+            else:
+                print(f"⚠️ {name} 抓取內容為空，可能被該站阻擋。", flush=True)
 
-    except FloodWaitError as e:
-        print(f"❌ 觸發 Telegram 冷卻機制：請等待 {e.seconds} 秒後再試。", flush=True)
     except Exception as e:
-        print(f"❌ 發生錯誤: {e}", flush=True)
+        print(f"❌ 嚴重錯誤: {e}", flush=True)
     finally:
         await client.disconnect()
 
